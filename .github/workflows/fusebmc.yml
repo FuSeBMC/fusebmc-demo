@@ -105,15 +105,15 @@ jobs:
           find . -name '*.sarif' -exec mv {} ${{ github.workspace }}/sarif_output/ \;
           echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_OUTPUT
 
-      - name: Upload SARIF files for Code Scanning
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: ${{ github.workspace }}/sarif_output
-
       - name: Fail if vulnerabilities found
         if: steps.fusebmc-analysis.outputs.vulnerabilities_found == 'true'
         run: |
           echo "Vulnerabilities were found. Pipeline failed."
           exit 1
+
+      - name: Upload SARIF files for Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ github.workspace }}/sarif_output
 
            
