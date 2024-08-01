@@ -106,14 +106,13 @@ jobs:
     - name: Find SARIF files
       id: find-sarif
       run: |
-        sarif_files=$(find ${{ github.workspace }}/fusebmc_output -name '*.sarif' -print0 | xargs -0)
-        echo "Found SARIF files: $sarif_files"
-        echo "sarif_files=$sarif_files" >> $GITHUB_ENV
+        sarif_files=$(find ${{ github.workspace }}/fusebmc_output -name '*.sarif' -printf '%p\n' | jq -R -s -c 'split("\n")[:-1]')
+        echo "sarif_files=$sarif_files" >> $GITHUB_OUTPUT
 
     - name: Upload SARIF results
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       with:
-        sarif_file: ${{ env.sarif_files }}
+        sarif_file: ${{ fromJson(steps.find-sarif.outputs.sarif_files) }}
 
     - name: Fail if vulnerabilities found
       if: steps.fusebmc-analysis.outputs.vulnerabilities_found == 'true'
