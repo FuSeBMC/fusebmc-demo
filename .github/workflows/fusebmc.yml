@@ -94,6 +94,7 @@ jobs:
                   if grep -q '<data key="violation">true</data>' "$graphml"; then
                     echo "Violation found in the following GraphML file: $graphml"
                     vulnerabilities_found=true
+                    return 0
                   fi
                 fi
               done
