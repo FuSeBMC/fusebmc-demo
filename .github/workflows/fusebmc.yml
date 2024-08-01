@@ -12,12 +12,12 @@ jobs:
       actions: read
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: '3.x'
 
@@ -26,7 +26,7 @@ jobs:
         pip install -r .github/scripts/Requirements.txt
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
+      uses: docker/setup-buildx-action@v2
 
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v2
@@ -57,24 +57,26 @@ jobs:
         else
           changed_files=$(git ls-tree -r --name-only HEAD | grep -E '\.c$|\.i$' || true)
         fi
-        echo "Changed files: $changed_files"
-        echo "files=$changed_files" >> $GITHUB_OUTPUT
+        echo "Changed files:"
+        echo "$changed_files"
+        echo "files<<EOF" >> $GITHUB_OUTPUT
+        echo "$changed_files" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Run FuSeBMC on changed C files
       id: fusebmc-analysis
       run: |
         mkdir -p ${{ github.workspace }}/sarif_output  
         vulnerabilities_found=false
-        for file in ${{ steps.changed-files.outputs.files }}; do
-          if [ -f "$file" ]; then
+        echo "${{ steps.changed-files.outputs.files }}" | while read -r file; do
+          if [ -n "$file" ] && [ -f "$file" ]; then
             echo "Processing file: $file"
            
             # Run FuSeBMC and capture the output
-            output=$(docker run \
-              --name fusebmc_container \
+            docker run --name fusebmc_container \
               -v ${{ github.workspace }}:/workspace \
               ghcr.io/fusebmc/fusebmc-ai:run-ESBMC-individual-property \
-              --ESBMC_Multirun --ai --verification -a 64 -s incr /workspace/$file)
+              --ESBMC_Multirun --ai --verification -a 64 -s incr /workspace/"$file"
            
             # Copy the output from the container to the workspace
             docker cp fusebmc_container:/fusebmc_output ${{ github.workspace }}/fusebmc_output
@@ -86,17 +88,16 @@ jobs:
             output_dir=$(find ${{ github.workspace }}/fusebmc_output -type d -name "${file_name}_*" | head -n 1)
            
             # Analyze GraphML files for violation witnesses
-            for graphml in $output_dir/fusebmc_instrument_output/*.graphml; do
+            find "$output_dir/fusebmc_instrument_output" -name '*.graphml' | while read -r graphml; do
               echo "Checking GraphML file: $graphml"
-              cat $graphml
-              if [ -f "$graphml" ] && [[ $graphml != *"veri_1.graphml" && $graphml != *"veri_2.graphml" ]]; then
+              if [[ $graphml != *"veri_1.graphml" && $graphml != *"veri_2.graphml" ]]; then
                 if grep -q '<data key="violation">true</data>' "$graphml"; then
                   echo "Violation found in the following GraphML file: $graphml"
                   vulnerabilities_found=true
                 fi
               fi
             done
-            python3 .github/scripts/Make_Sarif.py $output_dir/fusebmc_instrument_output .github/scripts/rules.json
+            python3 .github/scripts/Make_Sarif.py "$output_dir/fusebmc_instrument_output" .github/scripts/rules.json
           fi
         done
         echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_OUTPUT
@@ -105,13 +106,12 @@ jobs:
     - name: Find SARIF files
       id: find-sarif
       run: |
-        sarif_files=$(find ${{ github.workspace }}/fusebmc_output -name '*.sarif' -print0 | tr '\0' '\n')
+        sarif_files=$(find ${{ github.workspace }}/fusebmc_output -name '*.sarif' -print0 | xargs -0)
         echo "Found SARIF files: $sarif_files"
         echo "sarif_files=$sarif_files" >> $GITHUB_ENV
 
-
     - name: Upload SARIF results
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: ${{ env.sarif_files }}
 
