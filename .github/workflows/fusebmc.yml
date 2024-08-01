@@ -105,6 +105,9 @@ jobs:
           find . -name '*.sarif' -exec mv {} ${{ github.workspace }}/sarif_output/ \;
           echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_OUTPUT
 
+      - name: Debug output
+        run: echo ${{ steps.fusebmc-analysis.outputs.vulnerabilities_found }}
+
       - name: Fail if vulnerabilities found
         if: steps.fusebmc-analysis.outputs.vulnerabilities_found == 'true'
         run: |
