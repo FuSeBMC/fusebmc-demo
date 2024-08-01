@@ -67,6 +67,21 @@ jobs:
         id: fusebmc-analysis
         run: |
           mkdir -p ${{ github.workspace }}/sarif_output  
+          
+          check_graphml_files() {
+            local output_dir="$1"
+            for graphml in "$output_dir"/fusebmc_instrument_output/*.graphml; do
+              echo "Checking GraphML file: $graphml"
+              if [ -f "$graphml" ] && [[ $graphml != *"veri_1.graphml" && $graphml != *"veri_2.graphml" ]]; then
+                if grep -q '<data key="violation">true</data>' "$graphml"; then
+                  echo "Violation found in the following GraphML file: $graphml"
+                  return 0  # Exit the function with status 0 (true)
+                fi
+              fi
+            done
+            return 1  # Exit the function with status 1 (false) if no violation found
+          }
+
           vulnerabilities_found=false
           echo "${{ steps.changed-files.outputs.files }}" | while read -r file; do
             if [ -n "$file" ] && [ -f "$file" ]; then
@@ -77,34 +92,31 @@ jobs:
                 -v ${{ github.workspace }}:/workspace \
                 ghcr.io/fusebmc/fusebmc-ai:run-ESBMC-individual-property \
                 --ESBMC_Multirun --ai --verification -a 64 -s incr /workspace/$file)
-             
+              
               # Copy the output from the container to the workspace
               docker cp fusebmc_container:/fusebmc_output ${{ github.workspace }}/fusebmc_output
-             
+              
               # Remove the container
               docker rm fusebmc_container
 
               file_name=$(basename "$file")
               output_dir=$(find ${{ github.workspace }}/fusebmc_output -type d -name "${file_name}_*" | head -n 1)
-             
-              # Analyze GraphML files for violation witnesses
-              for graphml in $output_dir/fusebmc_instrument_output/*.graphml; do
-                echo "Checking GraphML file: $graphml"
-                if [ -f "$graphml" ] && [[ $graphml != *"veri_1.graphml" && $graphml != *"veri_2.graphml" ]]; then
-                  if grep -q '<data key="violation">true</data>' "$graphml"; then
-                    echo "Violation found in the following GraphML file: $graphml"
-                    vulnerabilities_found=true
-                    return 0
-                  fi
-                fi
-              done
+              
+              # Check GraphML files for violation witnesses
+              if check_graphml_files "$output_dir"; then
+                vulnerabilities_found=true
+                break  # Exit the while loop early if a violation is found
+              fi
+
               python3 .github/scripts/Make_Sarif.py $output_dir/fusebmc_instrument_output .github/scripts/rules.json
             fi
           done
+
+          echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_OUTPUT
+
           echo "SARIF files found in the current directory:"
           find . -name '*.sarif' -type f -print
           find . -name '*.sarif' -exec mv {} ${{ github.workspace }}/sarif_output/ \;
-          echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_OUTPUT
 
       - name: Debug output
         run: echo ${{ steps.fusebmc-analysis.outputs.vulnerabilities_found }}
@@ -119,5 +131,6 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{ github.workspace }}/sarif_output
+
 
            
