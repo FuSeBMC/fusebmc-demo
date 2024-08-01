@@ -90,7 +90,6 @@ jobs:
               # Analyze GraphML files for violation witnesses
               for graphml in $output_dir/fusebmc_instrument_output/*.graphml; do
                 echo "Checking GraphML file: $graphml"
-                cat $graphml
                 if [ -f "$graphml" ] && [[ $graphml != *"veri_1.graphml" && $graphml != *"veri_2.graphml" ]]; then
                   if grep -q '<data key="violation">true</data>' "$graphml"; then
                     echo "Violation found in the following GraphML file: $graphml"
