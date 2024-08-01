@@ -11,111 +11,117 @@ jobs:
       security-events: write
       actions: read
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
 
-    - name: Install dependencies
-      run: |
-        pip install -r .github/scripts/Requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install -r .github/scripts/Requirements.txt
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.MY_GITHUB_PAT }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.MY_GITHUB_PAT }}
 
-    - name: Pull FuSeBMC Docker image
-      run: docker pull ghcr.io/fusebmc/fusebmc-ai:run-ESBMC-individual-property
+      - name: Pull FuSeBMC Docker image
+        run: docker pull ghcr.io/fusebmc/fusebmc-ai:run-ESBMC-individual-property
 
-    - name: Run privileged command
-      run: |
-        sudo sh -c 'echo core > /proc/sys/kernel/core_pattern'
+      - name: Run privileged command
+        run: |
+          sudo sh -c 'echo core > /proc/sys/kernel/core_pattern'
 
-    - name: Get changed files
-      id: changed-files
-      run: |
-        if [ "${{ github.event_name }}" == "pull_request" ]; then
-          git fetch origin ${{ github.base_ref }}
-          changed_files=$(git diff --name-only --diff-filter=ACMRT origin/${{ github.base_ref }} ${{ github.sha }} | grep -E '\.c$|\.i$' || true)
-        elif [ "${{ github.event_name }}" == "push" ]; then
-          if git rev-parse --verify HEAD^1 >/dev/null 2>&1; then
-            changed_files=$(git diff --name-only --diff-filter=ACMRT HEAD^1 HEAD | grep -E '\.c$|\.i$' || true)
+      - name: Get changed files
+        id: changed-files
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            git fetch origin ${{ github.base_ref }}
+            changed_files=$(git diff --name-only --diff-filter=ACMRT origin/${{ github.base_ref }} ${{ github.sha }} | grep -E '\.c$|\.i$' || true)
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            if git rev-parse --verify HEAD^1 >/dev/null 2>&1; then
+              changed_files=$(git diff --name-only --diff-filter=ACMRT HEAD^1 HEAD | grep -E '\.c$|\.i$' || true)
+            else
+              changed_files=$(git ls-tree -r --name-only HEAD | grep -E '\.c$|\.i$' || true)
+            fi
           else
             changed_files=$(git ls-tree -r --name-only HEAD | grep -E '\.c$|\.i$' || true)
           fi
-        else
-          changed_files=$(git ls-tree -r --name-only HEAD | grep -E '\.c$|\.i$' || true)
-        fi
-        echo "Changed files:"
-        echo "$changed_files"
-        echo "files<<EOF" >> $GITHUB_OUTPUT
-        echo "$changed_files" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+          echo "Changed files:"
+          echo "$changed_files"
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$changed_files" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-    - name: Run FuSeBMC on changed C files
-      id: fusebmc-analysis
-      run: |
-        mkdir -p ${{ github.workspace }}/sarif_output  
-        vulnerabilities_found=false
-        echo "${{ steps.changed-files.outputs.files }}" | while read -r file; do
-          if [ -n "$file" ] && [ -f "$file" ]; then
-            echo "Processing file: $file"
-           
-            # Run FuSeBMC and capture the output
-            docker run --name fusebmc_container \
-              -v ${{ github.workspace }}:/workspace \
-              ghcr.io/fusebmc/fusebmc-ai:run-ESBMC-individual-property \
-              --ESBMC_Multirun --ai --verification -a 64 -s incr /workspace/"$file"
-           
-            # Copy the output from the container to the workspace
-            docker cp fusebmc_container:/fusebmc_output ${{ github.workspace }}/fusebmc_output
-           
-            # Remove the container
-            docker rm fusebmc_container
+      - name: Run FuSeBMC on changed C files
+        id: fusebmc-analysis
+        run: |
+          mkdir -p ${{ github.workspace }}/sarif_output  
+          vulnerabilities_found=false
+          echo "${{ steps.changed-files.outputs.files }}" | while read -r file; do
+            if [ -n "$file" ] && [ -f "$file" ]; then
+              echo "Processing file: $file"
+              # Run FuSeBMC and capture the output
+              output=$(docker run \
+                --name fusebmc_container \
+                -v ${{ github.workspace }}:/workspace \
+                ghcr.io/fusebmc/fusebmc-ai:run-ESBMC-individual-property \
+                --ESBMC_Multirun --ai --verification -a 64 -s incr /workspace/$file)
+             
+              # Copy the output from the container to the workspace
+              docker cp fusebmc_container:/fusebmc_output ${{ github.workspace }}/fusebmc_output
+             
+              # Remove the container
+              docker rm fusebmc_container
 
-            file_name=$(basename "$file")
-            output_dir=$(find ${{ github.workspace }}/fusebmc_output -type d -name "${file_name}_*" | head -n 1)
-           
-            # Analyze GraphML files for violation witnesses
-            find "$output_dir/fusebmc_instrument_output" -name '*.graphml' | while read -r graphml; do
-              echo "Checking GraphML file: $graphml"
-              if [[ $graphml != *"veri_1.graphml" && $graphml != *"veri_2.graphml" ]]; then
-                if grep -q '<data key="violation">true</data>' "$graphml"; then
-                  echo "Violation found in the following GraphML file: $graphml"
-                  vulnerabilities_found=true
+              file_name=$(basename "$file")
+              output_dir=$(find ${{ github.workspace }}/fusebmc_output -type d -name "${file_name}_*" | head -n 1)
+             
+              # Analyze GraphML files for violation witnesses
+              for graphml in $output_dir/fusebmc_instrument_output/*.graphml; do
+                echo "Checking GraphML file: $graphml"
+                cat $graphml
+                if [ -f "$graphml" ] && [[ $graphml != *"veri_1.graphml" && $graphml != *"veri_2.graphml" ]]; then
+                  if grep -q '<data key="violation">true</data>' "$graphml"; then
+                    echo "Violation found in the following GraphML file: $graphml"
+                    vulnerabilities_found=true
+                  fi
                 fi
-              fi
-            done
-            python3 .github/scripts/Make_Sarif.py "$output_dir/fusebmc_instrument_output" .github/scripts/rules.json
-          fi
-        done
-        echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_OUTPUT
-        find .
+              done
+              python3 .github/scripts/Make_Sarif.py $output_dir/fusebmc_instrument_output .github/scripts/rules.json
+            fi
+          done
+          echo "SARIF files found in the current directory:"
+          find . -name '*.sarif' -type f -print
+          find . -name '*.sarif' -exec mv {} ${{ github.workspace }}/sarif_output/ \;
+          echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_OUTPUT
 
-    - name: Find SARIF files
-      id: find-sarif
-      run: |
-        sarif_files=$(find ${{ github.workspace }}/fusebmc_output -name '*.sarif' -printf '%p\n' | jq -R -s -c 'split("\n")[:-1]')
-        echo "sarif_files=$sarif_files" >> $GITHUB_OUTPUT
+      - name: Upload SARIF files for Code Scanning
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: ${{ github.workspace }}/sarif_output
 
-    - name: Upload SARIF results
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: ${{ fromJson(steps.find-sarif.outputs.sarif_files) }}
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: fusebmc-results
+          path: results.md
 
-    - name: Fail if vulnerabilities found
-      if: steps.fusebmc-analysis.outputs.vulnerabilities_found == 'true'
-      run: |
-        echo "Vulnerabilities were found. Pipeline failed."
-        exit 1
+      - name: Fail if vulnerabilities found
+        if: steps.fusebmc-analysis.outputs.vulnerabilities_found == 'true'
+        run: |
+          echo "Vulnerabilities were found. Pipeline failed."
+          exit 1
+
+           
