@@ -58,7 +58,7 @@ jobs:
           changed_files=$(git ls-tree -r --name-only HEAD | grep -E '\.c$|\.i$' || true)
         fi
         echo "Changed files: $changed_files"
-        echo "files=$changed_files" >> $GITHUB_OUTPUT
+        echo "files=$changed_files" >> $GITHUB_ENV
 
     - name: Run FuSeBMC on changed C files
       id: fusebmc-analysis
@@ -99,7 +99,7 @@ jobs:
             python3 .github/scripts/Make_Sarif.py $output_dir/fusebmc_instrument_output .github/scripts/rules.json
           fi
         done
-        echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_OUTPUT
+        echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_ENV
         find .
 
     - name: Find SARIF files
