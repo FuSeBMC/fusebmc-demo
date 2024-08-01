@@ -65,7 +65,7 @@ jobs:
       run: |
         mkdir -p ${{ github.workspace }}/sarif_output  
         vulnerabilities_found=false
-        for file in ${{ steps.changed-files.outputs.files }}; do
+        for file in ${{ env.files }}; do
           if [ -f "$file" ]; then
             echo "Processing file: $file"
            
@@ -116,7 +116,7 @@ jobs:
         sarif_file: ${{ env.sarif_files }}
 
     - name: Fail if vulnerabilities found
-      if: steps.fusebmc-analysis.outputs.vulnerabilities_found == 'true'
+      if: ${{ env.vulnerabilities_found == 'true' }}
       run: |
         echo "Vulnerabilities were found. Pipeline failed."
         exit 1
