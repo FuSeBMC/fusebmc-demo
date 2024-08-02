@@ -58,8 +58,11 @@ jobs:
         else
           changed_files=$(git ls-tree -r --name-only HEAD | grep -E '\.c$|\.i$' || true)
         fi
-        echo "Changed files: $changed_files"
-        echo "files=$changed_files" >> $GITHUB_OUTPUT
+        echo "Changed files:"
+        echo "$changed_files"
+        echo "files<<EOF" >> $GITHUB_OUTPUT
+        echo "$changed_files" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Run FuSeBMC on changed C files
       id: fusebmc-analysis
