@@ -58,11 +58,8 @@ jobs:
         else
           changed_files=$(git ls-tree -r --name-only HEAD | grep -E '\.c$|\.i$' || true)
         fi
-        echo "Changed files:"
-        echo "$changed_files"
-        echo "files<<EOF" >> $GITHUB_OUTPUT
-        echo "$changed_files" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        echo "Changed files: $changed_files"
+        echo "files=$changed_files" >> $GITHUB_OUTPUT
 
     - name: Run FuSeBMC on changed C files
       id: fusebmc-analysis
@@ -105,28 +102,15 @@ jobs:
             python3 .github/scripts/Make_Sarif.py $output_dir/fusebmc_instrument_output .github/scripts/rules.json
           fi
         done
+        echo "SARIF files found in the current directory:"
+        find . -name '*.sarif' -type f -print
+        find . -name '*.sarif' -exec mv {} ${{ github.workspace }}/sarif_output/ \;
         echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_OUTPUT
-        find .
 
-    - name: Find SARIF files
-      id: find-sarif
-      run: |
-        sarif_files=$(find ${{ github.workspace }}/fusebmc_output -name '*.sarif' -print0 | tr '\0' '\n')
-        echo "Found SARIF files: $sarif_files"
-        echo "sarif_files=$sarif_files" >> $GITHUB_ENV
-
-
-    - name: Upload SARIF results
+    - name: Upload SARIF files for Code Scanning
       uses: github/codeql-action/upload-sarif@v3
       with:
-        sarif_file: ${{ env.sarif_files }}
-
-    - name: Upload results
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-        name: fusebmc-results
-        path: results.md
+        sarif_file: ${{ github.workspace }}/sarif_output
 
     - name: Fail if vulnerabilities found
       if: steps.fusebmc-analysis.outputs.vulnerabilities_found == 'true'
