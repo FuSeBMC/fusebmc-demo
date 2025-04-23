@@ -10,11 +10,12 @@ int main(int argc, char *argv[]) {
     printf("number: %d",num);
     char buffer[10];
 
-    for (int i = 0; i < num; i++) {
-        buffer[i] = 'X';
+    if(num < 10){
+        for (int i = 0; i < num; i++) {
+            buffer[i] = 'X';
+        }
+        buffer[num] = '\0';
     }
-    buffer[num] = '\0';
-
 
     printf("Buffer contents: %s\n", buffer);
     return 0;
