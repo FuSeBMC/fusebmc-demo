@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-
 int main(int argc, char *argv[]) {
     printf("running");
     srand(time(NULL));
@@ -14,7 +13,6 @@ int main(int argc, char *argv[]) {
         buffer[i] = 'X';
     }
     buffer[num] = '\0';
-
 
     printf("Buffer contents: %s\n", buffer);
     return 0;
