@@ -93,8 +93,7 @@ def parse_graphml_file(file_path):
             # all line numbers >= 1. 
     return data
 
-
-def build_sarif(data,rules):
+def build_sarif(data, rules):
     sarif_log = sarif.SarifLog(
         version="2.1.0",
         runs=[]
@@ -104,7 +103,7 @@ def build_sarif(data,rules):
 
     tool = sarif.Tool(
         driver=sarif.ToolComponent(
-            name="FuSeBMC", # hardcoded tool info, improve this later
+            name="FuSeBMC",
             version="AI-dev",
             information_uri="https://github.com/kaled-alshmrany/FuSeBMC",
             rules=rules_json
@@ -118,26 +117,25 @@ def build_sarif(data,rules):
             for rule in rules_json:
                 if graphml["type"].startswith(rule.id):
                     description = rule.short_description.text
-                            
-            for line in graphml["data"]["violations"]:
+
+            # فقط نأخذ أول خط من قائمة violations
+            if graphml["data"]["violations"]:
+                first_line = graphml["data"]["violations"][0]
                 fusebmc_results.append(sarif.Result(
                     rule_id=graphml["type"],
                     level="error",
                     message=sarif.Message(
-
                         text="A vulnerability was found: " + description
                     ),
                     locations=[
                         sarif.Location(
                             physical_location=sarif.PhysicalLocation(
                                 artifact_location=sarif.ArtifactLocation(
-                                    uri= os.path.sep.join(graphml["data"]["file_name"].split(os.path.sep)[2:]) #this is removing the top level path of the uri
-                                    # from the graphml file, this is required as running in the docker image causes the directory to be workspace/.../file.c
-                                    # when github expects ./file.c
+                                    uri=os.path.sep.join(graphml["data"]["file_name"].split(os.path.sep)[2:])
                                 ),
                                 region=sarif.Region(
-                                    start_line=line,
-                                    end_line=line
+                                    start_line=first_line,
+                                    end_line=first_line
                                 )
                             )
                         )
@@ -147,7 +145,7 @@ def build_sarif(data,rules):
     run = sarif.Run(
         tool=tool,
         results=fusebmc_results,
-        invocations=[ # check this, might need to change
+        invocations=[
             sarif.Invocation(
                 execution_successful=True,
                 start_time_utc=datetime.utcnow().isoformat() + "Z",
@@ -159,9 +157,6 @@ def build_sarif(data,rules):
     sarif_log.runs.append(run)
 
     return sarif_log
-
-
-
 
 def main():
     parser = argparse.ArgumentParser(description="Process GraphML files and convert them to SARIF.")
