@@ -1,3 +1,8 @@
+#include <assert.h>
+#include <stdio.h>
+
+extern int __VERIFIER_nondet_int();
+
 int main(){
     int a, x, y = 0, z;
     a = __VERIFIER_nondet_int();
