@@ -53,7 +53,7 @@
         "name": "LockOrder",
         "short_description": "Inconsistent lock acquisition",
         "full_description": "Occurs when locks are acquired in an inconsistent order, increasing the likelihood of deadlocks",
-        "level": "High",
+        "level": "High"
     },
     {
         "id": "FSBMC1009",
