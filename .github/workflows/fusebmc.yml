@@ -111,8 +111,8 @@ jobs:
       with:
         sarif_file: ${{ github.workspace }}/sarif_output
 
-    - name: Upload SARIF artifact
-      uses: actions/upload-artifact@v2.3.1
+    - name: Upload SARIF
+      uses: actions/upload-artifact@v3
       with:
         name: fusebmc-sarif-output
         path: ${{ github.workspace }}/sarif_output
