@@ -112,7 +112,7 @@ jobs:
         sarif_file: ${{ github.workspace }}/sarif_output
 
     - name: Upload SARIF artifact
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         name: fusebmc-sarif-output
         path: ${{ github.workspace }}/sarif_output
