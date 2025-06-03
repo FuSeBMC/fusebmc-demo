@@ -105,6 +105,11 @@ jobs:
         find . -name '*.sarif' -type f -print
         find . -name '*.sarif' -exec mv {} ${{ github.workspace }}/sarif_output/ \;
         echo "vulnerabilities_found=$vulnerabilities_found" >> $GITHUB_OUTPUT
+    - name: Upload SARIF files as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: fusebmc-sarif-output
+        path: ${{ github.workspace }}/sarif_output
 
     - name: Upload SARIF files for Code Scanning
       uses: github/codeql-action/upload-sarif@v3
