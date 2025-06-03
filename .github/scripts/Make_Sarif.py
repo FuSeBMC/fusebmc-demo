@@ -5,8 +5,6 @@ import json
 import uuid
 from datetime import datetime
 import sarif_om as sarif
-from collections import Counter
-
 
 
 def snake_to_camel(snake_str):
@@ -120,10 +118,8 @@ def build_sarif(data, rules):
                 if graphml["type"].startswith(rule.id):
                     description = rule.short_description.text
 
-            violations = graphml["data"]["violations"]
-            if violations:
-                most_common_line = Counter(violations).most_common(1)[0][0]
-
+            if graphml["data"]["violations"]:
+                first_line = graphml["data"]["violations"][0]
                 fusebmc_results.append(sarif.Result(
                     rule_id=graphml["type"],
                     level="error",
@@ -137,8 +133,8 @@ def build_sarif(data, rules):
                                     uri=os.path.sep.join(graphml["data"]["file_name"].split(os.path.sep)[2:])
                                 ),
                                 region=sarif.Region(
-                                    start_line=most_common_line,
-                                    end_line=most_common_line
+                                    start_line=first_line,
+                                    end_line=first_line
                                 )
                             )
                         )
